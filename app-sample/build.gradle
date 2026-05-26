@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-kapt'
-apply plugin: 'kotlin-android-extensions'
+apply plugin: 'kotlin-parcelize'
 
 def gitSha = { ->
     def output = new ByteArrayOutputStream()
@@ -13,6 +13,8 @@ def gitSha = { ->
 }.memoize()
 
 android {
+
+    namespace 'io.noties.markwon.app'
 
     compileSdkVersion config['compile-sdk']
     buildToolsVersion config['build-tools']
@@ -58,34 +60,25 @@ android {
         }
     }
 
-    // do not sign in CI
-    if (!project.hasProperty('CI')) {
+    // Only sign if keystore exists and properties are provided
+    final def keystoreFile = project.file('keystore.jks')
+    final def keystoreFilePassword = 'MARKWON_KEYSTORE_FILE_PASSWORD'
+    final def keystoreAlias = 'MARKWON_KEY_ALIAS'
+    final def keystoreAliasPassword = 'MARKWON_KEY_ALIAS_PASSWORD'
+
+    final def properties = [
+            keystoreFilePassword,
+            keystoreAlias,
+            keystoreAliasPassword
+    ]
+
+    final def hasAllSigningConfig = keystoreFile.exists() && properties.every { project.hasProperty(it) }
+
+    if (hasAllSigningConfig) {
         signingConfigs {
             config {
-
-                final def keystoreFile = project.file('keystore.jks')
-                final def keystoreFilePassword = 'MARKWON_KEYSTORE_FILE_PASSWORD'
-                final def keystoreAlias = 'MARKWON_KEY_ALIAS'
-                final def keystoreAliasPassword = 'MARKWON_KEY_ALIAS_PASSWORD'
-
-                final def properties = [
-                        keystoreFilePassword,
-                        keystoreAlias,
-                        keystoreAliasPassword
-                ]
-
-                if (!keystoreFile.exists()) {
-                    throw new IllegalStateException("No '${keystoreFile.name}' file is found.")
-                }
-
-                final def missingProperties = properties.findAll { !project.hasProperty(it) }
-                if (!missingProperties.isEmpty()) {
-                    throw new IllegalStateException("Missing required signing properties: $missingProperties")
-                }
-
                 storeFile keystoreFile
                 storePassword project[keystoreFilePassword]
-
                 keyAlias project[keystoreAlias]
                 keyPassword project[keystoreAliasPassword]
             }
@@ -108,9 +101,6 @@ kapt {
     }
 }
 
-androidExtensions {
-    features = ["parcelize"]
-}
 
 configurations.all {
     exclude group: 'org.jetbrains', module: 'annotations-java5'
